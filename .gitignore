@@ -34,3 +34,6 @@
 # build and IDE folders
 build/
 .vscode/
+
+# IR generated files
+*.ll
