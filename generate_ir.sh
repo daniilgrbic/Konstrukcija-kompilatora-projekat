@@ -1,28 +1,31 @@
 #!/bin/bash
 
-# Check if the source file argument is provided
-if [ -z "$1" ]; then
-  echo "Usage: $0 SOURCE_FILE.cpp"
+if [ -z "$1" ] || [ -z "$2" ]; then
+  echo "Usage: $0 FOLDER_NAME SOURCE_FILE.cpp"
   exit 1
 fi
 
-# Get the source file from the argument
-SOURCE_FILE="$1"
+FOLDER_NAME="$1"
+SOURCE_FILE="$2"
+if [ "$1" == "DeadArgumentEliminationPass" ]; then
+    OPT_ARG="dead-arg-elim"
+elif [ "$1" == "AlwaysInlinePass" ]; then
+    OPT_ARG="always-inline-pass"
+else
+    OPT_ARG=""
+fi
 
-# Create directory 'build' if it doesn't exist
+cd "${FOLDER_NAME}"
+
 if [ ! -d "build" ]; then
   mkdir build
 fi
 
-# Navigate to 'build' directory
 cd build
-
-# Run CMake and Make for LLVM
 cmake ..
 make
-
-# Return to the parent directory
 cd ..
 
-# Run the Clang command
-clang -S -emit-llvm -Xclang -disable-O0-optnone "examples/$SOURCE_FILE"
+clang -S -emit-llvm -Xclang -disable-llvm-passes "examples/${SOURCE_FILE}.cpp" -o "${SOURCE_FILE}.ll"
+opt -enable-new-pm=0 -load ./build/lib${FOLDER_NAME}.so -"${OPT_ARG}" -S "${SOURCE_FILE}.ll" -o "${SOURCE_FILE}_opt.ll" 
+

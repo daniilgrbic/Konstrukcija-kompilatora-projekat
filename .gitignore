@@ -37,3 +37,4 @@ build/
 
 # IR generated files
 *.ll
+*.txt
