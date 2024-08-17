@@ -5,7 +5,8 @@ Projekat za kurs Konstrukcija Kompilatora na Matematičkom fakultetu Univerzita 
 # Odrađene optimizacije
 
 - Always Inline Pass
-- Dead Argument Elimination
+- Dead Argument Elimination Pass
+- Identical (Duplicate) Block Merge Pass
 
 # Potrebne biblioteke
 Instalirati sledeće alate:
