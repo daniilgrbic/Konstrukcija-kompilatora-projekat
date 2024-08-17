@@ -7,6 +7,7 @@
 
 #include <vector>
 #include <set>
+#include <map>
 
 using namespace llvm;
 
@@ -15,6 +16,10 @@ struct IdenticalBBMergePass : public FunctionPass {
     static char ID;
 
     IdenticalBBMergePass() : FunctionPass(ID) {}
+
+    std::set<BasicBlock*> MarkedBlocks;
+
+    std::map<Value*, Value*> IdentialInstructions;
 
     unsigned instructionCount(BasicBlock* BB) {
 
@@ -53,10 +58,18 @@ struct IdenticalBBMergePass : public FunctionPass {
             return false;
 
         for(unsigned OperandIndex = 0; OperandIndex != Instruction1->getNumOperands(); OperandIndex++) {
-            if(Instruction1->getOperand(OperandIndex) != Instruction2->getOperand(OperandIndex)) {
-                return false;
-            }
+
+            if(Instruction1->getOperand(OperandIndex) == Instruction2->getOperand(OperandIndex))
+                continue;
+
+            if(IdentialInstructions[Instruction1->getOperand(OperandIndex)] == Instruction2->getOperand(OperandIndex))
+                continue;
+
+            return false;
         }
+
+        IdentialInstructions.insert({Instruction1, Instruction2});
+        IdentialInstructions.insert({Instruction2, Instruction1});
 
         return true;
     }
@@ -102,13 +115,18 @@ struct IdenticalBBMergePass : public FunctionPass {
             if(instructionCount(BB1) != instructionCount(BB2))
                 continue;
 
+            IdentialInstructions.clear();
             bool CanMergeAllInstructions = true;
+
             for(std::pair<Instruction*, Instruction*> PI : zipBBIterator(BB1, BB2)) {
                 if(not canMergeInstructions(PI.first, PI.second)) {
                     CanMergeAllInstructions = false;
                     break;
                 }
             }
+
+            if(not CanMergeAllInstructions)
+                continue;
 
             updateBranchSuccessors(BB1, BB2);
             MarkedBlocks.insert(BB1);
@@ -117,8 +135,6 @@ struct IdenticalBBMergePass : public FunctionPass {
 
         return false;
     }
-
-    std::set<BasicBlock*> MarkedBlocks;
 
     virtual bool runOnFunction(Function& F) {
 
