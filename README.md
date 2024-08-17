@@ -4,11 +4,11 @@ Projekat za kurs Konstrukcija Kompilatora na Matematičkom fakultetu Univerzita 
 
 # Odrađene optimizacije
 
-- Function Inliner
+- Always Inline Pass
 - Dead Argument Elimination
 
 # Potrebne biblioteke
-Instlirati sledece alate:
+Instalirati sledeće alate:
 - llvm
 - clang
 - cmake
@@ -18,17 +18,11 @@ _Na Ubuntu masini moze se ukucati:_ <br>
 
 # Kako generisati IR
 
-Omoguciti prava pristupa skripti: <br>
+Obezbediti prava izvršavanja pomoćnoj skripti: <br>
 `chmod +x generate_ir.sh`
 <br>
 
 Zatim za svako generisanje IR-a pokrenuti: <br>
-`./generate_ir.sh IME_FOLDERA IME_EXAMPLE_FAJLA`
+`./generate_ir.sh`
 
-_Za promenu pass-a, promeniti `IME_FOLDERA`_
-_Za promenu primera, promeniti promenljivu `IME_EXAMPLE_FAJLA`_
-
-<b>
-Primer: </b><br>
-
-`./generate_ir.sh AlwaysInlinePass InlinePrint`
+Skripta je interkativna.

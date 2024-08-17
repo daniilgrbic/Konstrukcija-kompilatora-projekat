@@ -1,31 +1,50 @@
 #!/bin/bash
 
-if [ -z "$1" ] || [ -z "$2" ]; then
-  echo "Usage: $0 FOLDER_NAME SOURCE_FILE.cpp"
-  exit 1
-fi
+cYellow='\033[0;33m'
+cOff='\033[0m'
+cGreen='\033[0;32m'
+mInfo="${cOff}[${cGreen}INFO${cOff}]"
 
-FOLDER_NAME="$1"
-SOURCE_FILE="$2"
-if [ "$1" == "DeadArgumentEliminationPass" ]; then
-    OPT_ARG="dead-arg-elim"
-elif [ "$1" == "AlwaysInlinePass" ]; then
-    OPT_ARG="always-inline-pass"
-else
-    OPT_ARG=""
-fi
+llvmPasses=($(find "$(pwd)" -maxdepth 1 -type d -name "*Pass"))
 
-cd "${FOLDER_NAME}"
+echo "Choose LLVM pass:"
+for i in "${!llvmPasses[@]}"; do
+    echo "  $((i + 1)) - $(basename "${llvmPasses[$i]}")"
+done
 
+read -p "Enter number from 1 to ${#llvmPasses[@]}: " i
+selectedPass=${llvmPasses[$((i - 1))]}
+
+selectedPass=$(basename $selectedPass)
+echo -e "$mInfo Selected pass: $selectedPass"
+
+# Enter the selected pass subfolder
+cd "$selectedPass"
+passArg=$(< passArg)
+echo -e "$mInfo Selected pass argument: $passArg"
+
+# Build the LLVM pass using CMake
 if [ ! -d "build" ]; then
   mkdir build
 fi
-
 cd build
 cmake ..
 make
 cd ..
 
-clang -S -emit-llvm -Xclang -disable-llvm-passes "examples/${SOURCE_FILE}.cpp" -o "${SOURCE_FILE}.ll"
-opt -enable-new-pm=0 -load ./build/lib${FOLDER_NAME}.so -"${OPT_ARG}" -S "${SOURCE_FILE}.ll" -o "${SOURCE_FILE}_opt.ll" 
+# Generate the IR for examples
+cd examples
+for file in *.cpp; do
+  if [[ -f "$file" ]]; then
+    echo -e "$mInfo Generating IR for $file"
+    clang -S -emit-llvm -Xclang -disable-llvm-passes "$file" -o "$file.unopt.ll"
+    echo -e "$mInfo Optimizing $file.unopt.ll"
+    echo -ne "${cYellow}"
+    opt -enable-new-pm=0 -load "../build/lib$selectedPass.so" -"$passArg" -S "$file.unopt.ll" -o "$file.opt.ll" 
+    echo -e "$mInfo ${cGreen}DONE! See $file.opt.ll${cOff}"
+  fi
+done
+cd ..
 
+# Finally, return to root folder
+cd ..
