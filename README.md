@@ -2,13 +2,14 @@
 
 Projekat za kurs Konstrukcija Kompilatora na Matematičkom fakultetu Univerzita u Beogradu
 
-# Odrađene optimizacije
+## Odrađene optimizacije
 
-- Always Inline Pass
-- Dead Argument Elimination Pass
-- Identical (Duplicate) Block Merge Pass
+- [Always Inline Pass](/AlwaysInlinePass/)
+- [Dead Argument Elimination Pass](/DeadArgumentEliminationPass/)
+- [Identical (Duplicate) Block Merge Pass](/IdenticalBBMergePass/)
+- [Implicit MulOperand Upcast Pass](/ImplicitMulOperandUpcastPass/)
 
-# Potrebne biblioteke
+## Potrebne biblioteke
 Instalirati sledeće alate:
 - llvm
 - clang
@@ -17,7 +18,7 @@ Instalirati sledeće alate:
 _Na Ubuntu masini moze se ukucati:_ <br>
 `sudo apt install llvm clang cmake`
 
-# Kako generisati IR
+## Kako generisati IR
 
 Obezbediti prava izvršavanja pomoćnoj skripti: <br>
 `chmod +x generate_ir.sh`
