@@ -13,7 +13,13 @@ for i in "${!llvmPasses[@]}"; do
 done
 
 read -p "Enter number from 1 to ${#llvmPasses[@]}: " i
-selectedPass=${llvmPasses[$((i - 1))]}
+
+if [[ $i -ge 1 && $i -le ${#llvmPasses[@]} ]]; then
+  selectedPass=${llvmPasses[$((i - 1))]}
+else
+  echo "Invalid input. Exiting."
+  exit 1
+fi
 
 selectedPass=$(basename $selectedPass)
 echo -e "$mInfo Selected pass: $selectedPass"
