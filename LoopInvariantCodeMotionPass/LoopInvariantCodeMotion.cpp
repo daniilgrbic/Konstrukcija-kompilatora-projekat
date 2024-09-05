@@ -20,13 +20,11 @@ struct LICMPass : public LoopPass {
             for(Instruction& I : *BB) {
                 if(isa<StoreInst>(I)) {
                     if(V == I.getOperand(1)) {
-                        errs() << "True\n";
                         return true;
                     }
                 }
             }
         }
-        errs() << "False\n";
         return false;
     }
 
@@ -44,17 +42,18 @@ struct LICMPass : public LoopPass {
             Instruction &I = *it++;
 
             instructionValues.insert({&I, &I});
-            if(isa<AddOperator>(I)) {
-                errs() << I << "\n";
-                Value* op0 = instructionValues[I.getOperand(0)]->getOperand(0);
-                Value* op1 = instructionValues[I.getOperand(1)]->getOperand(0);
-                if(checkIfOperandChangedInLoop(L, op0, &LoopEntry))
-                    continue;
-                if(checkIfOperandChangedInLoop(L, op1, &LoopEntry))
-                    continue;
-                instructionValues[I.getOperand(0)]->moveBefore(preheader->getTerminator());
-                instructionValues[I.getOperand(1)]->moveBefore(preheader->getTerminator());
-                I.moveBefore(preheader->getTerminator());
+            if (auto *BinOp = dyn_cast<BinaryOperator>(&I)) {
+                if(BinOp->getOpcode() == Instruction::Add) {
+                    Value* op0 = instructionValues[I.getOperand(0)]->getOperand(0);
+                    Value* op1 = instructionValues[I.getOperand(1)]->getOperand(0);
+                    if(checkIfOperandChangedInLoop(L, op0, &LoopEntry))
+                        continue;
+                    if(checkIfOperandChangedInLoop(L, op1, &LoopEntry))
+                        continue;
+                    instructionValues[I.getOperand(0)]->moveBefore(preheader->getTerminator());
+                    instructionValues[I.getOperand(1)]->moveBefore(preheader->getTerminator());
+                    I.moveBefore(preheader->getTerminator());
+                }
             }
         }
 
