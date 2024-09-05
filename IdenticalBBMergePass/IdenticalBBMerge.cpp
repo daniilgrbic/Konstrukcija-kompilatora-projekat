@@ -1,8 +1,4 @@
 #include "llvm/Pass.h"
-#include "llvm/IR/Function.h"
-#include "llvm/IR/Module.h"
-#include "llvm/Transforms/Utils/Cloning.h"
-#include "llvm/IR/IRBuilder.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 
 #include <vector>
@@ -17,28 +13,30 @@ struct IdenticalBBMergePass : public FunctionPass {
 
     IdenticalBBMergePass() : FunctionPass(ID) {}
 
-    std::set<BasicBlock*> MarkedBlocks;
+    std::set<BasicBlock*> BlocksMarkedForDeletion;
+    std::map<Value*, Value*> IdenticalInstructions;
 
-    std::map<Value*, Value*> IdentialInstructions;
-
+    /**
+     * Counts instructions in a given basic block, skipping debug instructions.
+     */
     unsigned instructionCount(BasicBlock* BB) {
-
-        unsigned Count = 0;
-
-        for(Instruction& Instr : BB->instructionsWithoutDebug()) {
-            Count++;
-        }
-
-        return Count;
+        
+        return std::distance(
+            BB->instructionsWithoutDebug().begin(),
+            BB->instructionsWithoutDebug().end()
+        );
     }
 
-    std::vector<std::pair<Instruction*, Instruction*>> 
-    zipBBIterator(BasicBlock* BB1, BasicBlock* BB2) {
+    /**
+     * Zips instructions from two given basic blocks and returns a vector of pairs of pointers to paired
+     * instructions. The function assumes both basic blocks have the same number of instructions.
+     */
+    std::vector<std::pair<Instruction*, Instruction*>> zipBBIterator(BasicBlock* BB1, BasicBlock* BB2) {
 
-        std::vector<std::pair<Instruction*, Instruction*>> Result;
         auto BB1IteratorRange = BB1->instructionsWithoutDebug();
         auto BB2Iterator = BB2->instructionsWithoutDebug().begin();
 
+        std::vector<std::pair<Instruction*, Instruction*>> Result;
         for(auto BB1Iterator = BB1IteratorRange.begin(); 
             BB1Iterator != BB1IteratorRange.end(); 
             BB1Iterator++, BB2Iterator++) {
@@ -49,6 +47,19 @@ struct IdenticalBBMergePass : public FunctionPass {
         return Result;
     }
 
+    /**
+     * Determines if instructions I1 and I2 can be merged. 
+     * 
+     * After some basic checks (operation type, operand count), the function compares the operands. 
+     * Two operands are considered the same if they are completely identical, or represent the same
+     * value. 
+     * 
+     * E.g. consider the following sequence of instructions: `c = a + b; d = a + b;` Although `c`
+     * and `d` are not the same LLVM IR variable, they still represent the same value, and two
+     * instructions utilizing `c` and `d` in the future can also be considered identical.
+     * 
+     * For the last part, the function utilizes previous results from `IdenticalInstructions`.
+     */
     bool canMergeInstructions(Instruction* Instruction1, Instruction* Instruction2) {
 
         if(not Instruction1->isSameOperationAs(Instruction2))
@@ -62,18 +73,22 @@ struct IdenticalBBMergePass : public FunctionPass {
             if(Instruction1->getOperand(OperandIndex) == Instruction2->getOperand(OperandIndex))
                 continue;
 
-            if(IdentialInstructions[Instruction1->getOperand(OperandIndex)] == Instruction2->getOperand(OperandIndex))
+            if(IdenticalInstructions[Instruction1->getOperand(OperandIndex)] == Instruction2->getOperand(OperandIndex))
                 continue;
 
             return false;
         }
 
-        IdentialInstructions.insert({Instruction1, Instruction2});
-        IdentialInstructions.insert({Instruction2, Instruction1});
+        IdenticalInstructions.insert({Instruction1, Instruction2});
+        IdenticalInstructions.insert({Instruction2, Instruction1});
 
         return true;
     }
 
+    /**
+     * Given two identical basic blocks with common predecessors, this function updates the last
+     * instruction of each predecessor of the erased block to instead jump to the kept block.
+     */
     void updateBranchSuccessors(BasicBlock* BBErase, BasicBlock* BBKeep) {
 
         for(BasicBlock *BB : predecessors(BBErase)) {
@@ -90,18 +105,20 @@ struct IdenticalBBMergePass : public FunctionPass {
 
     bool mergeDuplicateBlocks(BasicBlock* BB1) {
 
-        if(&BB1->getParent()->getEntryBlock() == BB1)
+        // Entry block can't have duplicates and thus can't be merged
+        if(BB1->isEntryBlock())
             return false;
         
+        // Skip last block in the function (if last instruction is ret and not branching), 
+        // also skip blocks with more than one successor for simplicity
         BranchInst* BB1Terminator = dyn_cast<BranchInst>(BB1->getTerminator());
         if(not BB1Terminator || BB1Terminator->isConditional())
             return false;
 
+        // We want to compare BB1 to blocks which share a common successor with BB1
         for(BasicBlock* BB2 : predecessors(BB1Terminator->getSuccessor(0))) {
 
-            if(&BB2->getParent()->getEntryBlock() == BB2)
-                continue;
-
+            // As with BB1, we check that the last instruction in BB2 is an unconditional jump
             BranchInst *BB2Terminator = dyn_cast<BranchInst>(BB2->getTerminator());
             if(not BB2Terminator || BB2Terminator->isConditional())
                 continue;
@@ -109,13 +126,13 @@ struct IdenticalBBMergePass : public FunctionPass {
             if(BB1 == BB2)
                 continue;
 
-            if(MarkedBlocks.count(BB2))
+            if(BlocksMarkedForDeletion.count(BB2))
                 continue;
 
             if(instructionCount(BB1) != instructionCount(BB2))
                 continue;
 
-            IdentialInstructions.clear();
+            IdenticalInstructions.clear();
             bool CanMergeAllInstructions = true;
 
             for(std::pair<Instruction*, Instruction*> PI : zipBBIterator(BB1, BB2)) {
@@ -129,7 +146,7 @@ struct IdenticalBBMergePass : public FunctionPass {
                 continue;
 
             updateBranchSuccessors(BB1, BB2);
-            MarkedBlocks.insert(BB1);
+            BlocksMarkedForDeletion.insert(BB1);
             return true;
         }
 
@@ -144,7 +161,7 @@ struct IdenticalBBMergePass : public FunctionPass {
             Changed |= mergeDuplicateBlocks(&BB);
         }
 
-        for(BasicBlock* BB : MarkedBlocks) {
+        for(BasicBlock* BB : BlocksMarkedForDeletion) {
             DeleteDeadBlock(BB);
         }
 
