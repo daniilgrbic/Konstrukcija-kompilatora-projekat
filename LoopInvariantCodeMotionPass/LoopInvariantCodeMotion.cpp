@@ -44,7 +44,7 @@ namespace {
 char LICMPass::ID = 0;
 
 static RegisterPass<LICMPass> X(
-    "licm",
+    "loop-invariant-code-motion",
     "Loop-Invariant Code Motion Pass",
     false,
     false

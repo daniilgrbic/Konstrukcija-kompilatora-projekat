@@ -8,6 +8,7 @@ Projekat za kurs Konstrukcija Kompilatora na Matematičkom fakultetu Univerzita 
 - [Dead Argument Elimination Pass](/DeadArgumentEliminationPass/)
 - [Identical (Duplicate) Block Merge Pass](/IdenticalBBMergePass/)
 - [Implicit MulOperand Upcast Pass](/ImplicitMulOperandUpcastPass/)
+- [Loop Invariant Code Motion Pass](/LoopInvariantCodeMotionPass/)
 
 ## Potrebne biblioteke
 Instalirati sledeće alate:
