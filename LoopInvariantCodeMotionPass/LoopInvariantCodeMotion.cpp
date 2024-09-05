@@ -5,41 +5,67 @@
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/IR/Instructions.h"
 
+#include <map>
+
 using namespace llvm;
 
-namespace {
-    struct LICMPass : public LoopPass {
-        static char ID;
-        LICMPass() : LoopPass(ID) {}
+struct LICMPass : public LoopPass {
+    static char ID;
+    LICMPass() : LoopPass(ID) {}
 
-        bool runOnLoop(Loop *L, LPPassManager &LPM) {
-            bool changed = false;
-
-            // getting block before the loop leads into it
-            BasicBlock *preheader = L->getLoopPreheader();
-            if (!preheader) return false;
-
-            for (auto *BB : L->blocks()) {
-                for (auto it = BB->begin(); it != BB->end(); ) {
-                    Instruction &I = *it++;
-
-                    if (L->hasLoopInvariantOperands(&I)) {
-                        if (isSafeToSpeculativelyExecute(&I)) {
-                            I.moveBefore(preheader->getTerminator());
-                            changed = true;
-                        }
+    bool checkIfOperandChangedInLoop(Loop* L, Value* V, BasicBlock* Entry) {
+        for (BasicBlock *BB : L->blocks()) {
+            if(BB == Entry)
+                continue;
+            for(Instruction& I : *BB) {
+                if(isa<StoreInst>(I)) {
+                    if(V == I.getOperand(1)) {
+                        errs() << "True\n";
+                        return true;
                     }
                 }
             }
-            return changed;
+        }
+        errs() << "False\n";
+        return false;
+    }
+
+    bool runOnLoop(Loop *L, LPPassManager &LPM) {
+        bool changed = false;
+
+        // getting block before the loop leads into it
+        BasicBlock *preheader = L->getLoopPreheader();
+        if (!preheader) return false;
+
+        BasicBlock& LoopEntry = **(L->block_begin());
+
+        std::map<Value*, Instruction*> instructionValues;
+        for (auto it = LoopEntry.begin(); it != LoopEntry.end(); ) {
+            Instruction &I = *it++;
+
+            instructionValues.insert({&I, &I});
+            if(isa<AddOperator>(I)) {
+                errs() << I << "\n";
+                Value* op0 = instructionValues[I.getOperand(0)]->getOperand(0);
+                Value* op1 = instructionValues[I.getOperand(1)]->getOperand(0);
+                if(checkIfOperandChangedInLoop(L, op0, &LoopEntry))
+                    continue;
+                if(checkIfOperandChangedInLoop(L, op1, &LoopEntry))
+                    continue;
+                instructionValues[I.getOperand(0)]->moveBefore(preheader->getTerminator());
+                instructionValues[I.getOperand(1)]->moveBefore(preheader->getTerminator());
+                I.moveBefore(preheader->getTerminator());
+            }
         }
 
-        void getAnalysisUsage(AnalysisUsage &AU) const override {
-            AU.addRequired<LoopInfoWrapperPass>();
-            AU.addPreserved<LoopInfoWrapperPass>();
-        }
-    };
-}
+        return changed;
+    }
+
+    void getAnalysisUsage(AnalysisUsage &AU) const override {
+        AU.addRequired<LoopInfoWrapperPass>();
+        AU.addPreserved<LoopInfoWrapperPass>();
+    }
+};
 
 char LICMPass::ID = 0;
 
