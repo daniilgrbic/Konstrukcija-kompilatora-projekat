@@ -7,26 +7,57 @@
 
 using namespace llvm;
 
-namespace {
-class DeadArgumentElimination : public ModulePass {
-public:
+struct DeadArgumentElimination : public ModulePass 
+{
   static char ID;
   DeadArgumentElimination() : ModulePass(ID) {}
 
-  bool runOnModule(Module &M) override;
+  virtual bool runOnModule(Module &M) {
+    bool Changed = false;
 
-  void getAnalysisUsage(AnalysisUsage &AU) const override {
-    AU.setPreservesAll();
+    for (Function &F : M) {
+      if (F.isDeclaration()) continue;
+
+      SmallVector<unsigned, 4> DeadArgs;
+      for (unsigned i = 0, e = F.arg_size(); i != e; ++i) {
+        Argument *Arg = F.getArg(i);
+        if (Arg->use_empty()) {
+          DeadArgs.push_back(i);
+        }
+      }
+
+      if (DeadArgs.empty()) {
+        continue;
+      }
+
+      Changed = true;
+
+      std::vector<Type *> ArgTypes;
+      for (auto &Arg : F.args()) {
+        if (std::find(DeadArgs.begin(), DeadArgs.end(), Arg.getArgNo()) == DeadArgs.end()) {
+          ArgTypes.push_back(Arg.getType());
+        }
+      }
+
+      FunctionType *FTy = FunctionType::get(F.getReturnType(), ArgTypes, F.isVarArg());
+      Function *NewF = Function::Create(FTy, F.getLinkage(), F.getName(), &M);
+      NewF->copyAttributesFrom(&F);
+
+      for (BasicBlock &BB : llvm::make_early_inc_range(F)) {
+          BB.moveBefore(&*NewF->begin());
+      }
+      
+      F.replaceAllUsesWith(NewF);
+      F.eraseFromParent();
+    }
+
+    return Changed;
   }
-};
-} // namespace
+
+}; 
 
 char DeadArgumentElimination::ID = 0;
 
-bool DeadArgumentElimination::runOnModule(Module &M) {
-  bool Changed = false;
 
-  return Changed;
-}
 
 static RegisterPass<DeadArgumentElimination> X("dead-arg-elim", "Dead Argument Elimination Pass", false, false);
